@@ -78,15 +78,17 @@ class WellBeingApp(ctk.CTk):
     # LOGIN PAGE
     # -----------------------------------
     def afficher_login(self):
+        # ... (votre code _creer_carte_principale et création des champs) ...
+        
         content_frame = self._creer_carte_principale("Connexion à votre espace")
-
+        
         # Champs
         self.email_login = ctk.CTkEntry(content_frame,
                                         placeholder_text="Adresse email",
                                         height=45,
                                         width=300,
                                         corner_radius=12,
-                                        font=ctk.CTkFont(size=14))
+                                        font=("Poppins", 14))
         self.email_login.pack(pady=10)
 
         self.password_login = ctk.CTkEntry(content_frame,
@@ -95,9 +97,13 @@ class WellBeingApp(ctk.CTk):
                                            height=45,
                                            width=300,
                                            corner_radius=12,
-                                           font=ctk.CTkFont(size=14))
+                                           font=("Poppins", 14))
         self.password_login.pack(pady=10)
 
+        # ... (votre code des boutons) ...
+        
+        # --- AJOUTER CETTE LIGNE ---
+        self.email_login.focus()
         # Boutons
         ctk.CTkButton(content_frame,
                       text="Se connecter",
