@@ -1,16 +1,28 @@
-import sqlite3
+import mysql.connector
 import hashlib
 import datetime
-import matplotlib.pyplot as plt
 
 
-################################
-# BASE DE DONNÉES
-################################
+# =====================================================
+#  CONFIGURATION BASE DE DONNÉES MYSQL
+# =====================================================
+
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",
+    "password": "30Juin2006*",   # change si besoin
+    "database": "wellbeing"
+}
+
 
 def get_db():
-    return sqlite3.connect("wellbeing.db")
+    """Retourne une connexion MySQL."""
+    return mysql.connector.connect(**DB_CONFIG)
 
+
+# =====================================================
+#  CRÉATION DES TABLES
+# =====================================================
 
 def create_tables():
     conn = get_db()
@@ -19,25 +31,26 @@ def create_tables():
     # Table utilisateurs
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE,
-            password TEXT,
-            age INTEGER,
-            weight REAL,
-            height REAL,
-            gender TEXT,
-            activity TEXT
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255) UNIQUE,
+            password VARCHAR(255),
+            age INT,
+            weight FLOAT,
+            height FLOAT,
+            gender VARCHAR(20),
+            activity VARCHAR(20)
         );
     """)
 
     # Table historique
     cur.execute("""
         CREATE TABLE IF NOT EXISTS history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            date TEXT,
-            weight REAL,
-            score INTEGER
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            date DATE,
+            weight FLOAT,
+            score INT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
     """)
 
@@ -45,118 +58,143 @@ def create_tables():
     conn.close()
 
 
-################################
-# CRYPTAGE & AUTHENTIFICATION
-################################
+# =====================================================
+#  UTILITAIRES
+# =====================================================
 
 def hash_password(password):
+    """Hash SHA256 pour sécuriser les mots de passe."""
     return hashlib.sha256(password.encode()).hexdigest()
 
 
+# =====================================================
+#  CRÉATION UTILISATEUR
+# =====================================================
+
 def create_user(email, password):
+    """Crée un utilisateur. Retourne True si création OK."""
     try:
         conn = get_db()
         cur = conn.cursor()
 
-        cur.execute("INSERT INTO users (email, password) VALUES (?, ?)",
-                    (email, hash_password(password)))
+        cur.execute(
+            "INSERT INTO users (email, password) VALUES (%s, %s)",
+            (email, hash_password(password))
+        )
 
         conn.commit()
         conn.close()
         return True
+
+    except mysql.connector.IntegrityError:
+        # Email déjà existant
+        return False
+
     except Exception as e:
-        print("Erreur création utilisateur :", e)
+        print("Erreur create_user :", e)
         return False
 
 
+# =====================================================
+#  LOGIN
+# =====================================================
+
 def login(email, password):
+    """Retourne user_id si connexion OK, sinon None."""
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("SELECT id, password FROM users WHERE email=?", (email,))
-    result = cur.fetchone()
+    cur.execute("SELECT id, password FROM users WHERE email=%s", (email,))
+    row = cur.fetchone()
     conn.close()
 
-    if result is None:
+    if row is None:
         return None
 
-    user_id, stored_hash = result
+    user_id, stored_hash = row
 
     if stored_hash == hash_password(password):
         return user_id
-    else:
-        return None
+    return None
 
 
-
-################################
-# SCORE SANTÉ
-################################
+# =====================================================
+#  CALCUL SCORE SANTÉ (IMC + âge + activité)
+# =====================================================
 
 def calcul_score(poids, taille, age, activite):
-    imc = poids / (taille * taille)
+    """Retourne un score santé entre 0 et 100."""
+
+    try:
+        poids = float(poids)
+        taille = float(taille)
+        age = int(age)
+    except:
+        return None  # données invalides
+
+    # empêcher crash / valeurs impossibles
+    if taille <= 0 or poids <= 0:
+        return None
+
+    imc = poids / (taille ** 2)
     score = 100
 
+    # -------------------------
     # Effet IMC
-    if imc > 25:
-        score -= 20
-    elif imc < 18:
+    # -------------------------
+    if imc > 35:         # obésité sévère
+        score -= 40
+    elif imc > 30:       # obésité
+        score -= 30
+    elif imc > 25:       # surpoids
+        score -= 15
+    elif imc < 18:       # trop maigre
         score -= 10
 
+    # -------------------------
     # Effet âge
-    if age > 45:
-        score -= 15
-
-    # Effet activité
-    if activite == "faible":
+    # -------------------------
+    if age > 60:
         score -= 20
+    elif age > 45:
+        score -= 10
+
+    # -------------------------
+    # Effet activité
+    # -------------------------
+    activite = activite.lower()
+
+    if activite == "faible":
+        score -= 25
     elif activite == "moyenne":
         score -= 10
+    elif activite == "élevée":
+        score += 5
+    else:
+        # activité invalide → on pénalise
+        score -= 15
 
-    return max(0, min(score, 100))
+    # score final borné
+    return max(0, min(100, score))
 
 
-################################
-# HISTORIQUE
-################################
+# =====================================================
+#  HISTORIQUE / TRACKING
+# =====================================================
 
 def add_history(user_id, weight, score):
-    conn = get_db()
-    cur = conn.cursor()
+    """Enregistre le poids & score du jour dans l'historique."""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
 
-    cur.execute("""
-        INSERT INTO history (user_id, date, weight, score)
-        VALUES (?, ?, ?, ?)
-    """, (user_id, datetime.date.today(), weight, score))
+        cur.execute("""
+            INSERT INTO history (user_id, date, weight, score)
+            VALUES (%s, %s, %s, %s)
+        """, (user_id, datetime.date.today(), weight, score))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
 
-
-
-################################
-# GRAPHIQUE
-################################
-
-def afficher_graphique(user_id):
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute("SELECT date, score FROM history WHERE user_id=? ORDER BY date", (user_id,))
-    rows = cur.fetchall()
-    conn.close()
-
-    if len(rows) == 0:
-        print("\nAucun historique trouvé.")
-        return
-
-    dates = [r[0] for r in rows]
-    scores = [r[1] for r in rows]
-
-    plt.plot(dates, scores, marker="o")
-    plt.title("Évolution du Score Santé")
-    plt.xlabel("Date")
-    plt.ylabel("Score")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
+    except Exception as e:
+        print("Erreur add_history :", e)
