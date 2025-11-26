@@ -5,17 +5,18 @@ from utils import (
     calcul_score,
     get_db,
     add_history,
-    afficher_graphique
+    
 )
+
 
 ################################
 # CHOISIR LE MODE : CONSOLE / INTERFACE GRAPHIQUE
 ################################
 
-USE_GUI = True   # <<< METS False POUR UTILISER LE TERMINAL
+USE_GUI = True   # <<< GUI = True, console = False
 
 if USE_GUI:
-    from interface import WellBeingApp   # on importe l’interface Tkinter
+    from interface import WellBeingApp  # on importe seulement l'interface graphique
 
 
 ################################
@@ -25,9 +26,10 @@ if USE_GUI:
 def afficher_profil(user_id):
     conn = get_db()
     cur = conn.cursor()
+    # ⚠ En MySQL on utiliserait %s, mais ce mode ne sert pas si USE_GUI = True
     cur.execute("""
         SELECT email, age, weight, height, gender, activity 
-        FROM users WHERE id=?
+        FROM users WHERE id=%s
     """, (user_id,))
     data = cur.fetchone()
     conn.close()
@@ -63,8 +65,8 @@ def modifier_profil(user_id):
 
     cur.execute("""
         UPDATE users 
-        SET age=?, weight=?, height=?, gender=?, activity=?
-        WHERE id=?
+        SET age=%s, weight=%s, height=%s, gender=%s, activity=%s
+        WHERE id=%s
     """, (age, poids, taille, sexe, activite, user_id))
 
     conn.commit()
@@ -97,7 +99,7 @@ def menu_user(user_id):
         elif choix == "2":
             conn = get_db()
             cur = conn.cursor()
-            cur.execute("SELECT weight, height, age, activity FROM users WHERE id=?", (user_id,))
+            cur.execute("SELECT weight, height, age, activity FROM users WHERE id=%s", (user_id,))
             p, t, a, act = cur.fetchone()
             conn.close()
 
@@ -165,6 +167,7 @@ if __name__ == "__main__":
     create_tables()
 
     if USE_GUI:
-        WellBeingApp()   # << LANCEMENT DE L’INTERFACE GRAPHIQUE
+        app = WellBeingApp()   # on crée la fenêtre
+        app.mainloop()         # on lance la boucle Tkinter (OBLIGATOIRE)
     else:
-        main_console()   # << LANCEMENT VERSION TERMINALE
+        main_console()
