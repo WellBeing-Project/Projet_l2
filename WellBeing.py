@@ -8,7 +8,6 @@ from utils import (
     
 )
 
-
 ################################
 # CHOISIR LE MODE : CONSOLE / INTERFACE GRAPHIQUE
 ################################
