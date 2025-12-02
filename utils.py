@@ -2,6 +2,11 @@ import mysql.connector
 import hashlib
 import datetime
 
+# =====================================================
+#  CLÉ API MISTRAL (pour l'IA plus tard)
+# =====================================================
+MISTRAL_API_KEY = "47EcBNFXwuiYoFaGjXWKOMW3osb2fwvU"
+
 
 # =====================================================
 #  CONFIGURATION BASE DE DONNÉES MYSQL
@@ -10,7 +15,7 @@ import datetime
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "30Juin2006*",   # change si besoin
+    "password": "30Juin2006*",     # ⚠️ change si nécessaire
     "database": "wellbeing"
 }
 
@@ -59,7 +64,7 @@ def create_tables():
 
 
 # =====================================================
-#  UTILITAIRES
+#  UTILS GÉNÉRAUX
 # =====================================================
 
 def hash_password(password):
@@ -72,26 +77,26 @@ def hash_password(password):
 # =====================================================
 
 def create_user(email, password):
-    """Crée un utilisateur. Retourne True si création OK."""
+    """Crée un utilisateur — Retourne True si OK."""
     try:
         conn = get_db()
         cur = conn.cursor()
 
-        cur.execute(
-            "INSERT INTO users (email, password) VALUES (%s, %s)",
-            (email, hash_password(password))
-        )
+        cur.execute("""
+            INSERT INTO users (email, password)
+            VALUES (%s, %s)
+        """, (email, hash_password(password)))
 
         conn.commit()
         conn.close()
         return True
 
     except mysql.connector.IntegrityError:
-        # Email déjà existant
+        # Email déjà utilisé
         return False
 
     except Exception as e:
-        print("Erreur create_user :", e)
+        print("Erreur create_user:", e)
         return False
 
 
@@ -100,7 +105,7 @@ def create_user(email, password):
 # =====================================================
 
 def login(email, password):
-    """Retourne user_id si connexion OK, sinon None."""
+    """Retourne user_id si login OK, sinon None."""
     conn = get_db()
     cur = conn.cursor()
 
@@ -115,11 +120,12 @@ def login(email, password):
 
     if stored_hash == hash_password(password):
         return user_id
+
     return None
 
 
 # =====================================================
-#  CALCUL SCORE SANTÉ (IMC + âge + activité)
+#  CALCUL DU SCORE SANTÉ
 # =====================================================
 
 def calcul_score(poids, taille, age, activite):
@@ -130,40 +136,32 @@ def calcul_score(poids, taille, age, activite):
         taille = float(taille)
         age = int(age)
     except:
-        return None  # données invalides
+        return None
 
-    # empêcher crash / valeurs impossibles
     if taille <= 0 or poids <= 0:
         return None
 
     imc = poids / (taille ** 2)
     score = 100
 
-    # -------------------------
     # Effet IMC
-    # -------------------------
-    if imc > 35:         # obésité sévère
+    if imc > 35:
         score -= 40
-    elif imc > 30:       # obésité
+    elif imc > 30:
         score -= 30
-    elif imc > 25:       # surpoids
+    elif imc > 25:
         score -= 15
-    elif imc < 18:       # trop maigre
+    elif imc < 18:
         score -= 10
 
-    # -------------------------
     # Effet âge
-    # -------------------------
     if age > 60:
         score -= 20
     elif age > 45:
         score -= 10
 
-    # -------------------------
     # Effet activité
-    # -------------------------
     activite = activite.lower()
-
     if activite == "faible":
         score -= 25
     elif activite == "moyenne":
@@ -171,19 +169,17 @@ def calcul_score(poids, taille, age, activite):
     elif activite == "élevée":
         score += 5
     else:
-        # activité invalide → on pénalise
-        score -= 15
+        score -= 15  # erreur activité → pénalité
 
-    # score final borné
     return max(0, min(100, score))
 
 
 # =====================================================
-#  HISTORIQUE / TRACKING
+#  HISTORIQUE
 # =====================================================
 
 def add_history(user_id, weight, score):
-    """Enregistre le poids & score du jour dans l'historique."""
+    """Ajoute une entrée d'historique (poids + score du jour)."""
     try:
         conn = get_db()
         cur = conn.cursor()
