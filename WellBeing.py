@@ -106,7 +106,7 @@ def menu_user(user_id):
             print(f"\nVotre score santé : {score}/100")
 
         elif choix == "3":
-            afficher_graphique(user_id)
+           print("⚠️ Le graphique est uniquement disponible dans l'interface graphique (GUI).")
 
         elif choix == "4":
             print("📸 Module IA bientôt disponible.")
