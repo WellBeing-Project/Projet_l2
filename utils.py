@@ -1,27 +1,128 @@
 import mysql.connector
 import hashlib
 import datetime
+import base64
+import requests
+import json
 
 # =====================================================
-#  CLÉ API MISTRAL (pour l'IA plus tard)
+#  CONFIGURATION OLLAMA (IA LOCALE)
 # =====================================================
-MISTRAL_API_KEY = "47EcBNFXwuiYoFaGjXWKOMW3osb2fwvU"
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "llava-phi3:latest"  # modèle vision installé localement
 
 
 # =====================================================
-#  CONFIGURATION BASE DE DONNÉES MYSQL
+#  IA TEXTE
+# =====================================================
+def ask_ollama(prompt):
+    """Envoie un prompt texte à Ollama et retourne proprement la réponse."""
+    try:
+        payload = {"model": OLLAMA_MODEL, "prompt": prompt}
+
+        r = requests.post(OLLAMA_URL, json=payload, stream=True)
+
+        final_text = ""
+
+        # Ollama renvoie un flux JSON → on lit ligne par ligne
+        for line in r.iter_lines():
+            if not line:
+                continue
+            try:
+                data = json.loads(line.decode())
+                if "response" in data:
+                    final_text += data["response"]
+            except:
+                continue
+
+        return final_text.strip()
+
+    except Exception as e:
+        print("Erreur Ollama texte:", e)
+        return "[Erreur IA]"
+
+
+# =====================================================
+#  IA VISION (LLAVA)
+# =====================================================
+# =====================================================
+#  IA VISION (LLAVA) — Nouvelle version
+# =====================================================
+
+ 
+def analyze_image_with_ollama(image_path):
+    try:
+        # --- Encode image en base64 ---
+        with open(image_path, "rb") as f:
+            img_base64 = base64.b64encode(f.read()).decode("utf-8")
+
+        # --- PROMPT : réponse UNIQUEMENT en JSON FRANÇAIS ---
+        prompt = """
+        Tu es un assistant spécialisé en analyse nutritionnelle d'images.
+        Tu dois OBLIGATOIREMENT répondre UNIQUEMENT avec du JSON strict,
+        sans aucun texte, phrase, emoji, explication ou commentaire.
+
+        La réponse doit être en FRANÇAIS.
+        N'inventes pas d'aliments que tu ne vois pas, si tu n'es pas certain n'écris pas.
+
+        Format EXACT attendu :
+
+        {
+            "items": [
+                {"name": "nom de l'aliment", "calories": nombre, "color": "vert|orange|rouge"}
+            ],
+            "total": nombre,
+            "advice": "phrase de conseil en français"
+        }
+
+        Règles :
+        - "color" indique si l'aliment est sain ("vert"), modéré ("orange") ou riche ("rouge").
+        - Donne une estimation réaliste en calories.
+        - Ne retourne RIEN d'autre que le JSON.
+        """
+
+        payload = {
+            "model": OLLAMA_MODEL,
+            "prompt": prompt,
+            "images": [img_base64],
+            "stream": False
+        }
+
+        response = requests.post(OLLAMA_URL, json=payload)
+        raw = response.json().get("response", "").strip()
+
+        # --- Extraction du JSON pur ---
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start == -1 or end == -1:
+            raise ValueError("Aucun JSON détecté dans la réponse.")
+
+        json_text = raw[start:end + 1]
+
+        return json.loads(json_text)
+
+    except Exception as e:
+        print("Erreur analyse image Ollama:", e)
+        return {
+            "items": [],
+            "total": 0,
+            "advice": "Impossible d'analyser le repas."
+        }
+
+# =====================================================
+#  CONFIGURATION MYSQL
 # =====================================================
 
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "30Juin2006*",     # ⚠️ change si nécessaire
+    "password": "30Juin2006*",
     "database": "wellbeing"
 }
 
-
 def get_db():
-    """Retourne une connexion MySQL."""
     return mysql.connector.connect(**DB_CONFIG)
 
 
@@ -33,7 +134,6 @@ def create_tables():
     conn = get_db()
     cur = conn.cursor()
 
-    # Table utilisateurs
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -47,7 +147,6 @@ def create_tables():
         );
     """)
 
-    # Table historique
     cur.execute("""
         CREATE TABLE IF NOT EXISTS history (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -64,11 +163,10 @@ def create_tables():
 
 
 # =====================================================
-#  UTILS GÉNÉRAUX
+#  SÉCURITÉ MOT DE PASSE
 # =====================================================
 
 def hash_password(password):
-    """Hash SHA256 pour sécuriser les mots de passe."""
     return hashlib.sha256(password.encode()).hexdigest()
 
 
@@ -77,7 +175,6 @@ def hash_password(password):
 # =====================================================
 
 def create_user(email, password):
-    """Crée un utilisateur — Retourne True si OK."""
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -92,7 +189,6 @@ def create_user(email, password):
         return True
 
     except mysql.connector.IntegrityError:
-        # Email déjà utilisé
         return False
 
     except Exception as e:
@@ -105,7 +201,6 @@ def create_user(email, password):
 # =====================================================
 
 def login(email, password):
-    """Retourne user_id si login OK, sinon None."""
     conn = get_db()
     cur = conn.cursor()
 
@@ -125,12 +220,10 @@ def login(email, password):
 
 
 # =====================================================
-#  CALCUL DU SCORE SANTÉ
+#  CALCUL SCORE SANTÉ
 # =====================================================
 
 def calcul_score(poids, taille, age, activite):
-    """Retourne un score santé entre 0 et 100."""
-
     try:
         poids = float(poids)
         taille = float(taille)
@@ -144,7 +237,6 @@ def calcul_score(poids, taille, age, activite):
     imc = poids / (taille ** 2)
     score = 100
 
-    # Effet IMC
     if imc > 35:
         score -= 40
     elif imc > 30:
@@ -154,13 +246,11 @@ def calcul_score(poids, taille, age, activite):
     elif imc < 18:
         score -= 10
 
-    # Effet âge
     if age > 60:
         score -= 20
     elif age > 45:
         score -= 10
 
-    # Effet activité
     activite = activite.lower()
     if activite == "faible":
         score -= 25
@@ -169,7 +259,7 @@ def calcul_score(poids, taille, age, activite):
     elif activite == "élevée":
         score += 5
     else:
-        score -= 15  # erreur activité → pénalité
+        score -= 15
 
     return max(0, min(100, score))
 
@@ -179,7 +269,6 @@ def calcul_score(poids, taille, age, activite):
 # =====================================================
 
 def add_history(user_id, weight, score):
-    """Ajoute une entrée d'historique (poids + score du jour)."""
     try:
         conn = get_db()
         cur = conn.cursor()
