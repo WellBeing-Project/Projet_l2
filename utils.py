@@ -117,8 +117,8 @@ def analyze_image_with_ollama(image_path):
 
 DB_CONFIG = {
     "host": "localhost",
-    "user": "root",
-    "password": "30Juin2006*",
+    "user": "wellbeing",
+    "password": "wellbeing",
     "database": "wellbeing"
 }
 

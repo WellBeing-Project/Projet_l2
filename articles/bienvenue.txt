@@ -1,0 +1,4 @@
+Titre: Bienvenue sur le blog
+Date: 2025-12-16
+---
+Ceci est notre premier article !

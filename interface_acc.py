@@ -4,6 +4,9 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from tkinter import filedialog
 from PIL import Image
+import os
+from datetime import datetime
+
 
 
 class MenuPrincipal(ctk.CTk):
@@ -35,6 +38,8 @@ class MenuPrincipal(ctk.CTk):
         self._menu_btn("✏️ Modifier profil", self.page_modifier)
         self._menu_btn("❤️ Score & graphique", self.page_score)
         self._menu_btn("🤖 Analyse repas", self.page_ia)
+        self._menu_btn("📰 Blog santé", self.page_blog)
+
 
         ctk.CTkButton(
             self.sidebar, text="Déconnexion",
@@ -313,3 +318,160 @@ class MenuPrincipal(ctk.CTk):
         self.response_label.insert("end", f"\n🔥 Total : {total} calories\n\n")
 
         self.response_label.insert("end", f"💡 Conseil : {data.get('advice')}\n")
+
+    def page_blog(self):
+        self.clear_content()
+
+        ctk.CTkLabel(
+            self.content,
+            text="📰 Blog santé",
+            font=("Poppins", 30, "bold"),
+            text_color="#1E8449"
+        ).pack(pady=20)
+
+        main = ctk.CTkFrame(self.content, fg_color="transparent")
+        main.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # Colonne gauche (liste + bouton)
+        left = ctk.CTkFrame(main, width=300, corner_radius=12, fg_color="#EAFAF1")
+        left.pack(side="left", fill="y", padx=(0, 15))
+
+        ctk.CTkButton(
+            left,
+            text="➕ Nouvel article",
+            fg_color="#3498DB", hover_color="#2E86C1",
+            command=self.page_blog_create
+        ).pack(fill="x", padx=10, pady=(10, 6))
+
+        self.blog_list = ctk.CTkScrollableFrame(left, fg_color="transparent")
+        self.blog_list.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        # Colonne droite (contenu)
+        right = ctk.CTkFrame(main, corner_radius=12, fg_color="#FEF9E7")
+        right.pack(side="right", fill="both", expand=True)
+
+        self.blog_text = ctk.CTkTextbox(right, font=("Poppins", 16))
+        self.blog_text.pack(fill="both", expand=True, padx=12, pady=12)
+
+        self._refresh_blog_list()
+
+
+    def _refresh_blog_list(self):
+        # Vide la liste
+        for w in self.blog_list.winfo_children():
+            w.destroy()
+
+        os.makedirs("articles", exist_ok=True)
+        files = sorted([f for f in os.listdir("articles") if f.endswith(".txt")], reverse=True)
+
+        if not files:
+            self.blog_text.delete("0.0", "end")
+            self.blog_text.insert("end", "Aucun article.\nClique sur ➕ Nouvel article pour en créer un.")
+            return
+
+        for f in files:
+            ctk.CTkButton(
+                self.blog_list,
+                text=f.replace(".txt", ""),
+                fg_color="#2ECC71", hover_color="#27AE60",
+                command=lambda name=f: self._open_article(os.path.join("articles", name))
+            ).pack(fill="x", pady=6)
+
+        # Ouvre le plus récent
+        self._open_article(os.path.join("articles", files[0]))
+
+    def _open_article(self, path):
+        self.blog_text.delete("0.0", "end")
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            # Suppression de "Titre:" et "Date:"
+            title = lines[0].replace("Titre:", "").strip()
+            date = lines[1].replace("Date:", "").strip()
+            content = "".join(lines[3:])  # saute la ligne '---'
+
+            # Affichage propre
+            self.blog_text.insert("end", title + "\n", "title")
+            self.blog_text.insert("end", date + "\n\n", "date")
+            self.blog_text.insert("end", content)
+
+            # Styles
+            self.blog_text.tag_configure("title", font=("Poppins", 22, "bold"))
+            self.blog_text.tag_configure("date", font=("Poppins", 12))
+
+        except Exception:
+            self.blog_text.insert("end", "❌ Impossible de lire l’article.")
+
+    def page_blog_create(self):
+        self.clear_content()
+
+        ctk.CTkLabel(
+            self.content,
+            text="✍️ Créer un article",
+            font=("Poppins", 30, "bold"),
+            text_color="#1E8449"
+        ).pack(pady=20)
+
+        form = ctk.CTkFrame(self.content, corner_radius=12, fg_color="#EAFAF1")
+        form.pack(fill="both", expand=True, padx=20, pady=10)
+
+        ctk.CTkLabel(form, text="Titre", font=("Poppins", 16, "bold")).pack(anchor="w", padx=12, pady=(12, 4))
+        self.blog_title_entry = ctk.CTkEntry(form, placeholder_text="Ex: 5 conseils pour mieux dormir")
+        self.blog_title_entry.pack(fill="x", padx=12, pady=(0, 12))
+
+        ctk.CTkLabel(form, text="Contenu", font=("Poppins", 16, "bold")).pack(anchor="w", padx=12, pady=(0, 4))
+        self.blog_body_text = ctk.CTkTextbox(form, font=("Poppins", 14))
+        self.blog_body_text.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+        btns = ctk.CTkFrame(form, fg_color="transparent")
+        btns.pack(fill="x", padx=12, pady=(0, 12))
+
+        ctk.CTkButton(
+            btns,
+            text="Publier",
+            fg_color="#2ECC71", hover_color="#27AE60",
+            command=self._save_blog_post
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            btns,
+            text="Annuler",
+            fg_color="#E74C3C", hover_color="#C0392B",
+            command=self.page_blog
+        ).pack(side="left", padx=10)
+
+        self.blog_create_msg = ctk.CTkLabel(form, text="", font=("Poppins", 14))
+        self.blog_create_msg.pack(anchor="w", padx=12, pady=(0, 12))
+
+
+    def _save_blog_post(self):
+        title = (self.blog_title_entry.get() or "").strip()
+        body = (self.blog_body_text.get("0.0", "end") or "").strip()
+
+        if not title or not body:
+            self.blog_create_msg.configure(text="❌ Titre et contenu obligatoires.", text_color="#C0392B")
+            return
+
+        os.makedirs("articles", exist_ok=True)
+
+        # Nom de fichier "safe"
+        safe = "".join(c.lower() if c.isalnum() else "-" for c in title).strip("-")
+        safe = "-".join([p for p in safe.split("-") if p])
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        filename = f"{date_str}-{safe[:60]}.txt"
+
+        path = os.path.join("articles", filename)
+        content = f"Titre: {title}\nDate: {date_str}\n---\n{body}\n"
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            self.page_blog()          # retour blog
+            self._refresh_blog_list() # recharge liste
+        except Exception:
+            self.blog_create_msg.configure(text="❌ Erreur lors de la sauvegarde.", text_color="#C0392B")
+
+
+
