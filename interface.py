@@ -1,9 +1,11 @@
 import customtkinter as ctk
-from CTkMessagebox import CTkMessagebox
-from utils import login, create_user, create_tables
 import tkinter as tk
+from tkinter import messagebox
 import re
-from interface_acc import MenuPrincipal   # OK
+from interface_acc import MenuPrincipal
+from utils import login, create_user
+
+
 
 BRAND_GREEN = "#1E8449"
 PRIMARY_BUTTON_COLOR = "#2ECC71"
@@ -12,7 +14,6 @@ SECONDARY_BUTTON_COLOR = "#A9DFBF"
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
-
 
 class WellBeingApp(ctk.CTk):
     def __init__(self):
@@ -169,8 +170,16 @@ class WellBeingApp(ctk.CTk):
     # CONNEXION
     # -------------------------------------------------------------------
     def connecter(self):
-        email = self.email_login.get()
-        password = self.password_login.get()
+        email = self.email_login.get().strip()
+        password = self.password_login.get().strip()
+
+        if not email or not password:
+            messagebox.showerror("Erreur", "Veuillez remplir tous les champs.")
+            return
+
+        if len(email) > 30 or len(password) > 30:
+            messagebox.showerror("Erreur", "Email (login) et mot de passe doivent faire 20 caractères maximum.")
+            return
 
         user_id = login(email, password)
 
@@ -178,7 +187,7 @@ class WellBeingApp(ctk.CTk):
             self.destroy()
             MenuPrincipal(user_id).mainloop()
         else:
-            CTkMessagebox(title="Erreur", message="Email ou mot de passe incorrect")
+            messagebox.showerror("Erreur", "Email ou mot de passe incorrect")
 
     # -------------------------------------------------------------------
     # INSCRIPTION
@@ -187,25 +196,29 @@ class WellBeingApp(ctk.CTk):
         email = self.email_register.get().strip()
         password = self.password_register.get().strip()
 
-        # Vérif email
-        pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
-        if not re.match(pattern, email):
-            CTkMessagebox(
-                title="❌ Erreur",
-                message="Adresse email invalide.\nExemple : nom@gmail.com"
-            )
+        if not email or not password:
+            messagebox.showerror("Erreur", "Veuillez remplir tous les champs.")
             return
 
-        if len(password) < 4:
-            CTkMessagebox(
-                title="❌ Erreur",
-                message="Mot de passe trop court (min. 4 caractères)."
-            )
+        if len(email) > 30:
+            messagebox.showerror("Erreur", "Email (login) trop long (20 caractères max).")
+            return
+
+        if len(password) > 30:
+            messagebox.showerror("Erreur", "Mot de passe trop long (20 caractères max).")
+            return
+
+        pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+        if not re.match(pattern, email):
+            messagebox.showerror("❌ Erreur", "Adresse email invalide.\nExemple : nom@gmail.com")
+            return
+
+        if len(password) < 5:
+            messagebox.showerror("❌ Erreur", "Mot de passe trop court (min. 4 caractères).")
             return
 
         if create_user(email, password):
-            CTkMessagebox(title="✔️ Succès",
-                          message="Compte créé ! Vous pouvez vous connecter.")
+            messagebox.showinfo("✔️ Succès", "Compte créé ! Vous pouvez vous connecter.")
             self.afficher_login()
         else:
-            CTkMessagebox(title="❌ Erreur", message="Email déjà utilisé.")
+            messagebox.showerror("❌ Erreur", "Email déjà utilisé.")
